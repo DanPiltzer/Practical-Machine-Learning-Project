@@ -1,0 +1,110 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Dan Piltzer"
+date: "February 12, 2017"
+output: html_document
+---
+#Introduction
+The purpose for performing this analysis is to predict the manner in which someone performed an exercise, using the variable "classe" from the a training data set.  this report will show the steps put in to create a prediction model, as well as what the believed out-of-sample error in this model will be.
+
+#Model Creation
+  
+###Loading Libraries and Data
+The first step is to load the necessary librarires that we will be using in this report, as well as the training and testing data sets. We will also set the seed to ensure the results can be reproduced.
+```{r, echo = FALSE}
+library(caret)
+library(dplyr)
+library(rattle)
+
+set.seed(800)
+
+training <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"))
+testing <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"))
+```
+
+###Setting Up Data for Model Creation
+We will now split the original training data set into a training and testing set in order to perform cross validation on the models we will build.  this will allow us to predict the out-of-sample error of our model and compare the accuracy of them.  We will randomly sample 70% of the data set to train the models on and use the other 30% to test.
+
+```{r}
+inTrain <- createDataPartition(y=training$classe, p=0.7, list=FALSE)
+new_train <- training[inTrain, ] 
+new_test <- training[-inTrain, ]
+```
+  
+In order to ensure the data has been split appropriately we will look at the dimension of the two new data sets
+```{r}
+dim(new_train)
+dim(new_test)
+```
+
+###Cleaning Data and Selecting Features
+We will now manipulate the data into a form we can use to create predictive models.  We will select which features should be included by removing any that have very little variance as well as any that should have no impact such as ID.
+
+We will first remove the first column since it is an ID.
+```{r}
+new_train <- new_train[c(-1)]
+new_test <- new_test[c(-1)]
+```
+ 
+We will also remove any features with very little variance.
+```{r}
+nzv <- nearZeroVar(new_train, saveMetrics=TRUE)
+new_train <- new_train[,nzv$nzv==FALSE]
+
+new_test <- new_test[,nzv$nzv==FALSE]
+```
+
+As well as any with missing values
+```{r}
+new_train <- new_train[, colSums(is.na(new_train)) == 0]
+new_test <- new_test[, colSums(is.na(new_test)) == 0]
+```
+
+###Classification Tree
+We will begin our modeling by testing out on a classification tree.  We will use 10 folds in our k-fold cross validation.
+
+```{r}
+control <- trainControl(method = "cv", number = 10)
+fit1 <- train(classe ~ ., data = new_train, method = "rpart", trControl = control)
+print(fit1, digits = 4)
+```
+
+
+We will now use a confusion matrix to determione overall accuracy.
+```{r}
+predict_fit1 <- predict(fit1, new_test)
+
+CM1 <- confusionMatrix(new_test$classe, predict_fit1)
+CM1
+```
+
+As you can see the accuracy is around 50% which is not as high as we would have hoped because this means the out of sample error rate would be 50%.
+
+###Random Forest Model
+We will now create a random forest model and check it's accuracy against our classification tree.
+
+```{r, cache = TRUE}
+fit2 <- train(classe ~ ., data = new_train, method = "rf", trControl = control)
+print(fit2, digits = 4)
+```
+
+```{r}
+predict_fit2 <- predict(fit2, new_test)
+
+CM2 <- confusionMatrix(new_test$classe, predict_fit2)
+CM2
+```
+
+Now you can see that the accuracy of this model is 99% which would mean the out-of-smple error rate is 1%.  This is definitely the model we would want to choose.
+
+#Predicting Testing Set
+
+We will now predict the type of activity for the 20 data points included in the original testing set.
+
+```{r}
+(predict(fit2, testing))
+```
+
+
+
+
